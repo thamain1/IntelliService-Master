@@ -31,6 +31,7 @@ import {
   Bell,
   PackageCheck,
   Upload,
+  HelpCircle,
   LucideIcon,
 } from 'lucide-react';
 
@@ -493,6 +494,20 @@ export const navigationConfig: NavigationGroup[] = [
             roles: ['admin'],
           },
         ],
+      },
+    ],
+  },
+  {
+    id: 'help',
+    label: 'Help & Support',
+    icon: HelpCircle,
+    roles: ['admin', 'dispatcher', 'technician'],
+    children: [
+      {
+        id: 'help',
+        label: 'Help Center',
+        icon: HelpCircle,
+        roles: ['admin', 'dispatcher', 'technician'],
       },
     ],
   },

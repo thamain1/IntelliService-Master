@@ -36,6 +36,7 @@ const RevenueTrendsInsight = lazy(() => import('./components/BI/RevenueTrendsIns
 const CustomerValueInsight = lazy(() => import('./components/BI/CustomerValueInsight').then(m => ({ default: m.CustomerValueInsight })));
 const DSOInsight = lazy(() => import('./components/BI/DSOInsight').then(m => ({ default: m.DSOInsight })));
 const LaborEfficiencyInsight = lazy(() => import('./components/BI/LaborEfficiencyInsight').then(m => ({ default: m.LaborEfficiencyInsight })));
+const HelpView = lazy(() => import('./components/Help/HelpView').then(m => ({ default: m.HelpView })));
 
 // Loading spinner for Suspense fallback
 const LoadingSpinner = () => (
@@ -208,6 +209,8 @@ function AppContent() {
         return <ContractPlansView />;
       case 'data-import':
         return <DataImportView />;
+      case 'help':
+        return <HelpView />;
       default:
         return <DashboardView />;
     }
