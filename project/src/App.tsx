@@ -11,7 +11,6 @@ const TicketsView = lazy(() => import('./components/Tickets/TicketsView').then(m
 const DispatchView = lazy(() => import('./components/Dispatch/DispatchView').then(m => ({ default: m.DispatchView })));
 const TrackingView = lazy(() => import('./components/Tracking/TrackingView').then(m => ({ default: m.TrackingView })));
 const MappingView = lazy(() => import('./components/Mapping/MappingView').then(m => ({ default: m.MappingView })));
-const DispatchMapView = lazy(() => import('./components/Mapping/DispatchMapView').then(m => ({ default: m.DispatchMapView })));
 const PartsManagementView = lazy(() => import('./components/Parts/PartsManagementView').then(m => ({ default: m.PartsManagementView })));
 const EquipmentView = lazy(() => import('./components/Equipment/EquipmentView').then(m => ({ default: m.EquipmentView })));
 const VendorsView = lazy(() => import('./components/Vendors/VendorsView').then(m => ({ default: m.VendorsView })));
@@ -113,7 +112,7 @@ function AppContent() {
       case 'tracking':
       case 'mapping':
       case 'dispatch-map':
-        return <DispatchMapView />;
+        return <MappingView />;
       case 'parts':
       case 'parts-inventory':
       case 'parts-purchase-orders':
