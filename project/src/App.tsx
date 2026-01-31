@@ -206,7 +206,7 @@ function AppContent() {
       case 'settings-labor-rates':
       case 'settings-notifications':
       case 'settings-permissions':
-        return <SettingsView />;
+        return <SettingsView initialTab={currentView} />;
       case 'settings-contract-plans':
         return <ContractPlansView />;
       case 'data-import':

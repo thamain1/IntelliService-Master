@@ -243,8 +243,9 @@ export function CustomerValueInsight() {
                       backgroundColor: '#1F2937',
                       border: 'none',
                       borderRadius: '8px',
-                      color: '#F9FAFB'
                     }}
+                    itemStyle={{ color: '#F9FAFB' }}
+                    labelStyle={{ color: '#F9FAFB' }}
                     formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
                   />
                   <Bar dataKey="revenue" radius={[0, 4, 4, 0]}>

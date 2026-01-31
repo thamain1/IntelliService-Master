@@ -1,18 +1,42 @@
-import { useState } from 'react';
-import { Users, Building, Bell, Shield } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, Building, Bell, Shield, DollarSign } from 'lucide-react';
 import { UserManagement } from './UserManagement';
 import { CompanySettings } from './CompanySettings';
 import { NotificationsSettings } from './NotificationsSettings';
 import { PermissionsSettings } from './PermissionsSettings';
+import { LaborRatesSettings } from './LaborRatesSettings';
 
-type SettingsTab = 'users' | 'company' | 'notifications' | 'permissions';
+type SettingsTab = 'users' | 'company' | 'notifications' | 'permissions' | 'labor-rates';
 
-export function SettingsView() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('users');
+interface SettingsViewProps {
+  initialTab?: string;
+}
+
+export function SettingsView({ initialTab }: SettingsViewProps) {
+  // Map navigation IDs to internal tab IDs
+  const getTabFromNavId = (navId?: string): SettingsTab => {
+    switch (navId) {
+      case 'settings-users': return 'users';
+      case 'settings-labor-rates': return 'labor-rates';
+      case 'settings-notifications': return 'notifications';
+      case 'settings-permissions': return 'permissions';
+      default: return 'users';
+    }
+  };
+
+  const [activeTab, setActiveTab] = useState<SettingsTab>(getTabFromNavId(initialTab));
+
+  // Update active tab when initialTab prop changes
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(getTabFromNavId(initialTab));
+    }
+  }, [initialTab]);
 
   const tabs = [
     { id: 'users' as SettingsTab, label: 'Users', icon: Users },
     { id: 'company' as SettingsTab, label: 'Company', icon: Building },
+    { id: 'labor-rates' as SettingsTab, label: 'Labor Rates', icon: DollarSign },
     { id: 'notifications' as SettingsTab, label: 'Notifications', icon: Bell },
     { id: 'permissions' as SettingsTab, label: 'Permissions', icon: Shield },
   ];
@@ -23,6 +47,8 @@ export function SettingsView() {
         return <UserManagement />;
       case 'company':
         return <CompanySettings />;
+      case 'labor-rates':
+        return <LaborRatesSettings />;
       case 'notifications':
         return <NotificationsSettings />;
       case 'permissions':

@@ -39,19 +39,52 @@ export function TechnicianMetricsReport() {
     try {
       setLoading(true);
 
+      // Get tickets with technician info
       const { data: tickets } = await supabase
         .from('tickets')
-        .select('*, profiles!tickets_assigned_to_fkey(full_name), invoices(total)')
+        .select('*, profiles!tickets_assigned_to_fkey(full_name)')
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString())
         .not('assigned_to', 'is', null);
+
+      // Get time logs for hours calculation
+      const { data: timeLogs } = await supabase
+        .from('time_logs')
+        .select('user_id, ticket_id, total_hours')
+        .gte('clock_in_time', start.toISOString())
+        .lte('clock_in_time', end.toISOString())
+        .eq('status', 'completed');
+
+      // Get invoices for revenue - use correct column name
+      const { data: invoices } = await supabase
+        .from('invoices')
+        .select('ticket_id, total_amount')
+        .gte('issue_date', start.toISOString())
+        .lte('issue_date', end.toISOString())
+        .not('status', 'in', '(draft,cancelled,written_off)');
+
+      // Build lookup maps
+      const hoursMap = new Map<string, number>();
+      timeLogs?.forEach((log: any) => {
+        if (log.ticket_id) {
+          const existing = hoursMap.get(log.ticket_id) || 0;
+          hoursMap.set(log.ticket_id, existing + Number(log.total_hours || 0));
+        }
+      });
+
+      const revenueMap = new Map<string, number>();
+      invoices?.forEach((inv: any) => {
+        if (inv.ticket_id) {
+          revenueMap.set(inv.ticket_id, Number(inv.total_amount || 0));
+        }
+      });
 
       const totalTickets = tickets?.length || 0;
       const completedTickets = tickets?.filter((t) => t.status === 'completed') || [];
 
       const avgHours =
         completedTickets.length > 0
-          ? completedTickets.reduce((sum, t) => sum + (t.hours_onsite || 0), 0) /
+          ? completedTickets.reduce((sum, t) => sum + (hoursMap.get(t.id) || 0), 0) /
             completedTickets.length
           : 0;
 
@@ -69,8 +102,8 @@ export function TechnicianMetricsReport() {
         }
 
         techStats[techId].tickets += 1;
-        techStats[techId].hours += ticket.hours_onsite || 0;
-        techStats[techId].revenue += ticket.invoices?.total || 0;
+        techStats[techId].hours += hoursMap.get(ticket.id) || 0;
+        techStats[techId].revenue += revenueMap.get(ticket.id) || 0;
       });
 
       const techPerformance = Object.values(techStats).sort((a, b) => b.tickets - a.tickets);
@@ -225,8 +258,9 @@ export function TechnicianMetricsReport() {
                       backgroundColor: '#1F2937',
                       border: 'none',
                       borderRadius: '8px',
-                      color: '#F9FAFB'
                     }}
+                    itemStyle={{ color: '#F9FAFB' }}
+                    labelStyle={{ color: '#F9FAFB' }}
                   />
                   <Legend />
                   <Bar dataKey="tickets" name="Tickets" fill="#3B82F6" radius={[4, 4, 0, 0]} />

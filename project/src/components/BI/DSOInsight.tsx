@@ -38,23 +38,24 @@ export function DSOInsight() {
     try {
       setLoading(true);
 
+      // Use correct column names: issue_date, total_amount, balance_due
       const { data: openInvoices } = await supabase
         .from('invoices')
         .select('*')
-        .neq('status', 'paid')
-        .neq('status', 'void');
+        .not('status', 'in', '(paid,void,draft,cancelled,written_off)');
 
       const totalAR =
-        openInvoices?.reduce((sum, inv) => sum + (inv.total || 0), 0) || 0;
+        openInvoices?.reduce((sum, inv) => sum + Number(inv.balance_due || 0), 0) || 0;
 
       const { data: allInvoices } = await supabase
         .from('invoices')
-        .select('total, invoice_date')
-        .gte('invoice_date', start.toISOString())
-        .lte('invoice_date', end.toISOString());
+        .select('total_amount, issue_date')
+        .gte('issue_date', start.toISOString())
+        .lte('issue_date', end.toISOString())
+        .not('status', 'in', '(draft,cancelled,written_off)');
 
       const totalSales =
-        allInvoices?.reduce((sum, inv) => sum + (inv.total || 0), 0) || 0;
+        allInvoices?.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0) || 0;
 
       const periodDays = Math.ceil(
         (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
@@ -93,7 +94,7 @@ export function DSOInsight() {
           bucketIndex = 4;
         }
 
-        agingBuckets[bucketIndex].amount += invoice.total || 0;
+        agingBuckets[bucketIndex].amount += Number(invoice.balance_due || 0);
         agingBuckets[bucketIndex].count += 1;
       });
 
@@ -242,8 +243,9 @@ export function DSOInsight() {
                       backgroundColor: '#1F2937',
                       border: 'none',
                       borderRadius: '8px',
-                      color: '#F9FAFB'
                     }}
+                    itemStyle={{ color: '#F9FAFB' }}
+                    labelStyle={{ color: '#F9FAFB' }}
                     formatter={(value: number) => [`$${value.toLocaleString()}`, 'Amount']}
                   />
                   <Bar dataKey="amount" radius={[4, 4, 0, 0]}>

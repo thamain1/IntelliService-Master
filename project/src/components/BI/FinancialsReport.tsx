@@ -40,17 +40,19 @@ export function FinancialsReport() {
     try {
       setLoading(true);
 
+      // Use correct column names: issue_date, total_amount
       const { data: invoices } = await supabase
         .from('invoices')
         .select('*')
-        .gte('invoice_date', start.toISOString())
-        .lte('invoice_date', end.toISOString());
+        .gte('issue_date', start.toISOString())
+        .lte('issue_date', end.toISOString())
+        .not('status', 'in', '(draft,cancelled,written_off)');
 
-      const totalRevenue = invoices?.reduce((sum, inv) => sum + (inv.total || 0), 0) || 0;
+      const totalRevenue = invoices?.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0) || 0;
       const paidAmount =
-        invoices?.filter((inv) => inv.status === 'paid').reduce((sum, inv) => sum + (inv.total || 0), 0) || 0;
+        invoices?.filter((inv) => inv.status === 'paid').reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0) || 0;
       const outstandingAmount =
-        invoices?.filter((inv) => inv.status !== 'paid' && inv.status !== 'void').reduce((sum, inv) => sum + (inv.total || 0), 0) || 0;
+        invoices?.filter((inv) => inv.status !== 'paid' && inv.status !== 'void').reduce((sum, inv) => sum + Number(inv.balance_due || 0), 0) || 0;
 
       const overdueInvoices =
         invoices?.filter(
@@ -61,7 +63,7 @@ export function FinancialsReport() {
             new Date(inv.due_date) < new Date()
         ) || [];
 
-      const overdueAmount = overdueInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+      const overdueAmount = overdueInvoices.reduce((sum, inv) => sum + Number(inv.balance_due || 0), 0);
 
       setMetrics({
         totalRevenue,
@@ -74,9 +76,9 @@ export function FinancialsReport() {
       // Group by date for chart
       const dailyMap = new Map<string, number>();
       invoices?.forEach((inv) => {
-        const date = new Date(inv.invoice_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const date = new Date(inv.issue_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         const existing = dailyMap.get(date) || 0;
-        dailyMap.set(date, existing + (inv.total || 0));
+        dailyMap.set(date, existing + Number(inv.total_amount || 0));
       });
 
       const chartData: DailyRevenue[] = Array.from(dailyMap.entries()).map(([date, revenue]) => ({
@@ -222,8 +224,9 @@ export function FinancialsReport() {
                       backgroundColor: '#1F2937',
                       border: 'none',
                       borderRadius: '8px',
-                      color: '#F9FAFB'
                     }}
+                    itemStyle={{ color: '#F9FAFB' }}
+                    labelStyle={{ color: '#F9FAFB' }}
                     formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
                   />
                   <Area
@@ -277,8 +280,9 @@ export function FinancialsReport() {
                       backgroundColor: '#1F2937',
                       border: 'none',
                       borderRadius: '8px',
-                      color: '#F9FAFB'
                     }}
+                    itemStyle={{ color: '#F9FAFB' }}
+                    labelStyle={{ color: '#F9FAFB' }}
                     formatter={(value: number) => [`$${value.toLocaleString()}`]}
                   />
                   <Legend />

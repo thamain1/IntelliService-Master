@@ -42,21 +42,24 @@ export function RevenueTrendsInsight() {
       const periodLength = end.getTime() - start.getTime();
       const priorStart = new Date(start.getTime() - periodLength);
 
+      // Use correct column names: issue_date, total_amount
       const { data: currentInvoices } = await supabase
         .from('invoices')
-        .select('total')
-        .gte('invoice_date', start.toISOString())
-        .lte('invoice_date', end.toISOString());
+        .select('total_amount')
+        .gte('issue_date', start.toISOString())
+        .lte('issue_date', end.toISOString())
+        .not('status', 'in', '(draft,cancelled,written_off)');
 
       const { data: priorInvoices } = await supabase
         .from('invoices')
-        .select('total')
-        .gte('invoice_date', priorStart.toISOString())
-        .lt('invoice_date', start.toISOString());
+        .select('total_amount')
+        .gte('issue_date', priorStart.toISOString())
+        .lt('issue_date', start.toISOString())
+        .not('status', 'in', '(draft,cancelled,written_off)');
 
       const currentRevenue =
-        currentInvoices?.reduce((sum, inv) => sum + (inv.total || 0), 0) || 0;
-      const priorRevenue = priorInvoices?.reduce((sum, inv) => sum + (inv.total || 0), 0) || 0;
+        currentInvoices?.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0) || 0;
+      const priorRevenue = priorInvoices?.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0) || 0;
 
       const percentChange =
         priorRevenue > 0 ? ((currentRevenue - priorRevenue) / priorRevenue) * 100 : 0;
@@ -76,18 +79,19 @@ export function RevenueTrendsInsight() {
       // Fetch daily revenue data for chart
       const { data: dailyData } = await supabase
         .from('invoices')
-        .select('invoice_date, total')
-        .gte('invoice_date', start.toISOString())
-        .lte('invoice_date', end.toISOString())
-        .order('invoice_date', { ascending: true });
+        .select('issue_date, total_amount')
+        .gte('issue_date', start.toISOString())
+        .lte('issue_date', end.toISOString())
+        .not('status', 'in', '(draft,cancelled,written_off)')
+        .order('issue_date', { ascending: true });
 
       // Group by date
       const dailyMap = new Map<string, { revenue: number; count: number }>();
       dailyData?.forEach((inv) => {
-        const date = new Date(inv.invoice_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const date = new Date(inv.issue_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         const existing = dailyMap.get(date) || { revenue: 0, count: 0 };
         dailyMap.set(date, {
-          revenue: existing.revenue + (inv.total || 0),
+          revenue: existing.revenue + Number(inv.total_amount || 0),
           count: existing.count + 1,
         });
       });
@@ -235,8 +239,9 @@ export function RevenueTrendsInsight() {
                       backgroundColor: '#1F2937',
                       border: 'none',
                       borderRadius: '8px',
-                      color: '#F9FAFB'
                     }}
+                    itemStyle={{ color: '#F9FAFB' }}
+                    labelStyle={{ color: '#F9FAFB' }}
                     formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
                   />
                   <Area
@@ -282,8 +287,9 @@ export function RevenueTrendsInsight() {
                       backgroundColor: '#1F2937',
                       border: 'none',
                       borderRadius: '8px',
-                      color: '#F9FAFB'
                     }}
+                    itemStyle={{ color: '#F9FAFB' }}
+                    labelStyle={{ color: '#F9FAFB' }}
                     formatter={(value: number) => [value, 'Invoices']}
                   />
                   <Bar dataKey="invoiceCount" fill="#10B981" radius={[4, 4, 0, 0]} />
