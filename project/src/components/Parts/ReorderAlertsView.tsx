@@ -14,12 +14,12 @@ interface Vendor {
 }
 
 interface GeneratedPO {
-  po_id: string;
-  po_number: string;
-  vendor_id: string;
-  vendor_name: string;
-  line_count: number;
-  total_amount: number;
+  out_po_id: string;
+  out_po_number: string;
+  out_vendor_id: string;
+  out_vendor_name: string;
+  out_line_count: number;
+  out_total_amount: number;
 }
 
 export function ReorderAlertsView() {
@@ -151,8 +151,8 @@ export function ReorderAlertsView() {
 
       const pos = data as GeneratedPO[];
       if (pos && pos.length > 0) {
-        const totalLines = pos.reduce((sum, po) => sum + po.line_count, 0);
-        const totalAmount = pos.reduce((sum, po) => sum + po.total_amount, 0);
+        const totalLines = pos.reduce((sum, po) => sum + po.out_line_count, 0);
+        const totalAmount = pos.reduce((sum, po) => sum + po.out_total_amount, 0);
         setSuccessMessage(
           `Generated ${pos.length} draft PO(s) with ${totalLines} line items totaling ${formatCurrency(totalAmount)}`
         );
@@ -418,7 +418,7 @@ export function ReorderAlertsView() {
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Est. Cost
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider sticky right-0 bg-gray-50 dark:bg-gray-700 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.1)]">
                     Action
                   </th>
                 </tr>
@@ -496,7 +496,7 @@ export function ReorderAlertsView() {
                           {formatCurrency(alert.unitCost * alert.suggestedOrderQty)}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="px-4 py-4 text-center sticky right-0 bg-white dark:bg-gray-800 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.1)]">
                         {alert.belowReorderPoint && alert.vendorId ? (
                           <button
                             onClick={() => createPOFromAlert(alert)}

@@ -205,12 +205,12 @@ CREATE OR REPLACE FUNCTION fn_generate_reorder_pos(
   p_vendor_id uuid DEFAULT NULL
 )
 RETURNS TABLE (
-  po_id uuid,
-  po_number text,
-  vendor_id uuid,
-  vendor_name text,
-  line_count integer,
-  total_amount numeric
+  out_po_id uuid,
+  out_po_number text,
+  out_vendor_id uuid,
+  out_vendor_name text,
+  out_line_count integer,
+  out_total_amount numeric
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -222,6 +222,7 @@ DECLARE
   v_line_number integer;
   v_subtotal numeric;
   v_alert RECORD;
+  v_line_count integer;
 BEGIN
   -- Get the next PO number base
   SELECT COALESCE(MAX(SUBSTRING(po_number FROM 'PO-(\d+)')::integer), 0) + 1
@@ -230,7 +231,7 @@ BEGIN
 
   -- Loop through vendors with items below reorder point
   FOR v_vendor IN
-    SELECT DISTINCT ra.vendor_id, ra.vendor_name
+    SELECT DISTINCT ra.vendor_id AS vid, ra.vendor_name AS vname
     FROM vw_reorder_alerts ra
     WHERE ra.below_reorder_point = true
       AND ra.vendor_id IS NOT NULL
@@ -252,7 +253,7 @@ BEGIN
       created_by
     ) VALUES (
       v_po_number,
-      v_vendor.vendor_id,
+      v_vendor.vid,
       CURRENT_DATE,
       'draft',
       'Auto-generated from reorder alerts',
@@ -265,14 +266,14 @@ BEGIN
     FOR v_alert IN
       SELECT
         ra.part_id,
-        ra.part_number,
-        ra.description,
+        ra.part_number AS pnum,
+        ra.description AS pdesc,
         ra.suggested_order_qty,
         ra.unit_cost,
         ra.vendor_part_number,
         ra.location_id
       FROM vw_reorder_alerts ra
-      WHERE ra.vendor_id = v_vendor.vendor_id
+      WHERE ra.vendor_id = v_vendor.vid
         AND ra.below_reorder_point = true
         AND (p_location_id IS NULL OR ra.location_id = p_location_id)
       ORDER BY ra.part_number
@@ -288,8 +289,8 @@ BEGIN
       ) VALUES (
         v_po_id,
         v_alert.part_id,
-        (SELECT COALESCE(MAX(line_number), 0) + 1 FROM purchase_order_lines WHERE po_id = v_po_id),
-        COALESCE(v_alert.description, v_alert.part_number),
+        (SELECT COALESCE(MAX(line_number), 0) + 1 FROM purchase_order_lines WHERE purchase_order_lines.po_id = v_po_id),
+        COALESCE(v_alert.pdesc, v_alert.pnum),
         v_alert.suggested_order_qty,
         v_alert.unit_cost,
         v_alert.suggested_order_qty * v_alert.unit_cost
@@ -302,15 +303,18 @@ BEGIN
     UPDATE purchase_orders
     SET subtotal = v_subtotal,
         total_amount = v_subtotal
-    WHERE id = v_po_id;
+    WHERE purchase_orders.id = v_po_id;
+
+    -- Get line count
+    SELECT COUNT(*) INTO v_line_count FROM purchase_order_lines WHERE purchase_order_lines.po_id = v_po_id;
 
     -- Return the created PO info
-    po_id := v_po_id;
-    po_number := v_po_number;
-    vendor_id := v_vendor.vendor_id;
-    vendor_name := v_vendor.vendor_name;
-    SELECT COUNT(*) INTO line_count FROM purchase_order_lines WHERE po_id = v_po_id;
-    total_amount := v_subtotal;
+    out_po_id := v_po_id;
+    out_po_number := v_po_number;
+    out_vendor_id := v_vendor.vid;
+    out_vendor_name := v_vendor.vname;
+    out_line_count := v_line_count;
+    out_total_amount := v_subtotal;
 
     RETURN NEXT;
   END LOOP;
