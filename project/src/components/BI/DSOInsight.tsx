@@ -42,7 +42,7 @@ export function DSOInsight() {
       const { data: openInvoices } = await supabase
         .from('invoices')
         .select('*')
-        .not('status', 'in', '(paid,void,draft,cancelled,written_off)');
+        .not('status', 'in', '(paid,draft,cancelled,written_off)');
 
       const totalAR =
         openInvoices?.reduce((sum, inv) => sum + Number(inv.balance_due || 0), 0) || 0;

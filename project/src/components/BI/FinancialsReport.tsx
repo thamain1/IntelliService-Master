@@ -52,13 +52,13 @@ export function FinancialsReport() {
       const paidAmount =
         invoices?.filter((inv) => inv.status === 'paid').reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0) || 0;
       const outstandingAmount =
-        invoices?.filter((inv) => inv.status !== 'paid' && inv.status !== 'void').reduce((sum, inv) => sum + Number(inv.balance_due || 0), 0) || 0;
+        invoices?.filter((inv) => inv.status !== 'paid' && inv.status !== 'cancelled').reduce((sum, inv) => sum + Number(inv.balance_due || 0), 0) || 0;
 
       const overdueInvoices =
         invoices?.filter(
           (inv) =>
             inv.status !== 'paid' &&
-            inv.status !== 'void' &&
+            inv.status !== 'cancelled' &&
             inv.due_date &&
             new Date(inv.due_date) < new Date()
         ) || [];
