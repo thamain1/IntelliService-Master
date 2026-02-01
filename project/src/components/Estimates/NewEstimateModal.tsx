@@ -200,7 +200,7 @@ export function NewEstimateModal({
     if (part) {
       setLineItems(lineItems.map(item => {
         if (item.id === itemId) {
-          const unitPrice = Number(part.cost || 0);
+          const unitPrice = Number(part.unit_price || 0);
           return {
             ...item,
             part_id: partId,
@@ -519,7 +519,7 @@ export function NewEstimateModal({
                           <option value="">Select part...</option>
                           {parts.map((part) => (
                             <option key={part.id} value={part.id}>
-                              {part.name} - ${part.cost}
+                              {part.name} - ${part.unit_price || 0}
                             </option>
                           ))}
                         </select>
@@ -581,7 +581,6 @@ export function NewEstimateModal({
                         value={item.unit_price}
                         onChange={(e) => updateLineItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
                         className="input text-sm"
-                        readOnly={item.item_type === 'labor' || item.item_type === 'parts'}
                       />
                     </div>
 
