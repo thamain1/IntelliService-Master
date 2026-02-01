@@ -95,7 +95,7 @@ export function NewBillModal({ isOpen, onClose, onBillCreated, preselectedVendor
         .from('chart_of_accounts')
         .select('id, account_code, account_name, account_type')
         .eq('is_active', true)
-        .in('account_type', ['expense', 'asset', 'cost_of_goods_sold'])
+        .in('account_type', ['expense', 'asset'])
         .order('account_code');
       setAccounts(data || []);
     } catch (err) {
