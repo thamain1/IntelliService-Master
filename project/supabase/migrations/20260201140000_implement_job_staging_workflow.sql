@@ -176,12 +176,12 @@ BEGIN
           reserved_at = now(),
           reserved_by = auth.uid()
         WHERE part_id = NEW.part_id
-        AND location_id = v_staging_location_id
+        AND stock_location_id = v_staging_location_id
         AND (reserved_for_ticket_id = v_linked_ticket_id OR reserved_for_ticket_id IS NULL);
 
         -- If no rows updated, insert new inventory record
         IF NOT FOUND THEN
-          INSERT INTO part_inventory (part_id, location_id, quantity, reserved_for_ticket_id, reserved_at, reserved_by)
+          INSERT INTO part_inventory (part_id, stock_location_id, quantity, reserved_for_ticket_id, reserved_at, reserved_by)
           VALUES (NEW.part_id, v_staging_location_id, v_new_qty, v_linked_ticket_id, now(), auth.uid());
         END IF;
       END;
@@ -223,10 +223,10 @@ BEGIN
           v_pick_list_id,
           pi.part_id,
           pi.quantity,
-          pi.location_id
+          pi.stock_location_id
         FROM part_inventory pi
         WHERE pi.reserved_for_ticket_id = v_linked_ticket_id
-        AND pi.location_id = v_staging_location_id
+        AND pi.stock_location_id = v_staging_location_id
         ON CONFLICT DO NOTHING;
 
         -- Update ticket: mark as PARTS_READY but keep on hold until pickup
@@ -318,7 +318,7 @@ BEGIN
     SELECT tpli.*, pi.quantity as staged_qty
     FROM ticket_pick_list_items tpli
     JOIN part_inventory pi ON pi.part_id = tpli.part_id
-      AND pi.location_id = tpli.source_location_id
+      AND pi.stock_location_id = tpli.source_location_id
       AND pi.reserved_for_ticket_id = p_ticket_id
     WHERE tpli.pick_list_id = v_pick_list_id
     AND tpli.picked_up = false
@@ -331,13 +331,13 @@ BEGIN
       reserved_at = NULL,
       reserved_by = NULL
     WHERE part_id = v_item.part_id
-    AND location_id = v_staging_location_id
+    AND stock_location_id = v_staging_location_id
     AND reserved_for_ticket_id = p_ticket_id;
 
     -- Add to tech's truck
-    INSERT INTO part_inventory (part_id, location_id, quantity)
+    INSERT INTO part_inventory (part_id, stock_location_id, quantity)
     VALUES (v_item.part_id, p_destination_location_id, v_item.quantity)
-    ON CONFLICT (part_id, location_id) DO UPDATE
+    ON CONFLICT (part_id, stock_location_id) DO UPDATE
     SET quantity = part_inventory.quantity + EXCLUDED.quantity;
 
     -- Mark item as picked up
