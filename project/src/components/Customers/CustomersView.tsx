@@ -78,7 +78,8 @@ export function CustomersView() {
       const { data, error } = await supabase
         .from('customers')
         .select('*')
-        .order('name', { ascending: true });
+        .order('name', { ascending: true })
+        .range(0, 4999);
 
       if (error) throw error;
       setCustomers(data || []);
