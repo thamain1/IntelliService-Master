@@ -426,12 +426,13 @@ export class JobPLService {
 
     const ticketIds = tickets.map((t) => t.id);
 
-    // First try to get parts cost from parts_usage table if records exist
-    const { data: partsUsage, error: usageError } = await supabase
-      .from('parts_usage')
+    // First try to get parts cost from ticket_parts_used table if records exist
+    const { data: partsUsed, error: usageError } = await supabase
+      .from('ticket_parts_used')
       .select(
         `
-        quantity_used,
+        quantity,
+        unit_cost,
         created_at,
         part_id,
         parts!inner(id, unit_price, part_inventory(unit_cost))
@@ -441,11 +442,12 @@ export class JobPLService {
       .gte('created_at', startDate)
       .lte('created_at', endDate);
 
-    if (!usageError && partsUsage && partsUsage.length > 0) {
+    if (!usageError && partsUsed && partsUsed.length > 0) {
       let totalCost = 0;
-      for (const usage of partsUsage) {
-        const unitCost = this.getPartCost(usage);
-        totalCost += parseFloat(String(usage.quantity_used || 0)) * unitCost;
+      for (const usage of partsUsed) {
+        // Use unit_cost from ticket_parts_used if available, otherwise fall back
+        const unitCost = usage.unit_cost ? parseFloat(String(usage.unit_cost)) : this.getPartCost(usage);
+        totalCost += parseFloat(String(usage.quantity || 0)) * unitCost;
       }
       return totalCost;
     }
@@ -495,12 +497,13 @@ export class JobPLService {
     startDate: string,
     endDate: string
   ): Promise<number> {
-    // First try to get parts cost from parts_usage table if records exist
-    const { data: partsUsage, error: usageError } = await supabase
-      .from('parts_usage')
+    // First try to get parts cost from ticket_parts_used table if records exist
+    const { data: partsUsed, error: usageError } = await supabase
+      .from('ticket_parts_used')
       .select(
         `
-        quantity_used,
+        quantity,
+        unit_cost,
         created_at,
         part_id,
         parts!inner(unit_price)
@@ -510,11 +513,14 @@ export class JobPLService {
       .gte('created_at', startDate)
       .lte('created_at', endDate);
 
-    if (!usageError && partsUsage && partsUsage.length > 0) {
+    if (!usageError && partsUsed && partsUsed.length > 0) {
       let totalCost = 0;
-      for (const usage of partsUsage) {
-        const unitCost = await this.getPartCostById(usage.part_id);
-        totalCost += parseFloat(String(usage.quantity_used || 0)) * unitCost;
+      for (const usage of partsUsed) {
+        // Use unit_cost from ticket_parts_used if available, otherwise look it up
+        const unitCost = usage.unit_cost
+          ? parseFloat(String(usage.unit_cost))
+          : await this.getPartCostById(usage.part_id);
+        totalCost += parseFloat(String(usage.quantity || 0)) * unitCost;
       }
       return totalCost;
     }

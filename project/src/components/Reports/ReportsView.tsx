@@ -94,19 +94,19 @@ export function ReportsView() {
             }, 0) / completedTickets.length
           : 0;
 
-      const { data: partsUsage } = await supabase
-        .from('parts_usage')
-        .select('part_id, parts(name), quantity_used')
+      const { data: partsUsed } = await supabase
+        .from('ticket_parts_used')
+        .select('part_id, parts(name), quantity')
         .gte('created_at', startDate.toISOString());
 
       const partCounts: Record<string, { name: string; count: number }> = {};
-      partsUsage?.forEach((usage: any) => {
+      partsUsed?.forEach((usage: any) => {
         const partId = usage.part_id;
         const partName = usage.parts?.name || 'Unknown';
         if (!partCounts[partId]) {
           partCounts[partId] = { name: partName, count: 0 };
         }
-        partCounts[partId].count += usage.quantity_used;
+        partCounts[partId].count += usage.quantity || 0;
       });
 
       const topPart = Object.values(partCounts).sort((a, b) => b.count - a.count)[0];

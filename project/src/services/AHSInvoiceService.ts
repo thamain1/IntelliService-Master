@@ -436,31 +436,16 @@ export class AHSInvoiceService {
   }
 
   /**
-   * Generate a unique invoice number
+   * Generate a unique invoice number using database sequence (race-condition safe)
    */
   private static async generateInvoiceNumber(): Promise<string> {
-    const prefix = 'INV';
-    const date = new Date();
-    const year = date.getFullYear().toString().slice(-2);
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const { data, error } = await supabase.rpc('generate_invoice_number');
 
-    // Get the last invoice number for this month
-    const { data } = await supabase
-      .from('invoices')
-      .select('invoice_number')
-      .like('invoice_number', `${prefix}-${year}${month}-%`)
-      .order('invoice_number', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    let sequence = 1;
-    if (data?.invoice_number) {
-      const lastSeq = parseInt(data.invoice_number.split('-')[2], 10);
-      if (!isNaN(lastSeq)) {
-        sequence = lastSeq + 1;
-      }
+    if (error) {
+      console.error('Error generating invoice number:', error);
+      throw new Error(`Failed to generate invoice number: ${error.message}`);
     }
 
-    return `${prefix}-${year}${month}-${sequence.toString().padStart(4, '0')}`;
+    return data as string;
   }
 }
