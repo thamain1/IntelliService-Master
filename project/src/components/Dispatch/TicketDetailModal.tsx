@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Clock, User, Calendar, Wrench, AlertCircle, Plus, Trash2, UserPlus, Pause, Package, Play, Tag, TrendingUp, AlertTriangle } from 'lucide-react';
+import { X, Clock, User, Calendar, Wrench, AlertCircle, Plus, Trash2, UserPlus, Pause, Package, Play, Tag, TrendingUp, AlertTriangle, Factory } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { CodeSelector } from '../CRM/CodeSelector';
-import { AHSPanel } from '../Tickets/AHSPanel';
-import { AHSTicketService } from '../../services/AHSTicketService';
+import { useFeature } from '../../hooks/useFeature';
+import { SendToShopModal } from '../Manufacturing/SendToShopModal';
+import { checkForConflicts, type ConflictingTicket } from '../../services/ScheduleConflictService';
 import type { Database } from '../../lib/database.types';
 
 type Ticket = Database['public']['Tables']['tickets']['Row'] & {
@@ -15,12 +16,12 @@ type Ticket = Database['public']['Tables']['tickets']['Row'] & {
     equipment_type: string;
     serial_number: string;
   };
-  site_contact_name?: string | null;
-  site_contact_phone?: string | null;
   problem_code?: string | null;
   resolution_code?: string | null;
-  sales_opportunity_flag?: boolean | null;
-  urgent_review_flag?: boolean | null;
+  site_contact_name?: string | null;
+  site_contact_phone?: string | null;
+  sales_opportunity_flag?: boolean;
+  urgent_review_flag?: boolean;
 };
 
 type Part = Database['public']['Tables']['parts']['Row'];
@@ -30,20 +31,6 @@ type TicketAssignment = Database['public']['Tables']['ticket_assignments']['Row'
 };
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
-
-interface PlannedPart {
-  id: string;
-  part_id: string;
-  quantity: number;
-  parts?: { part_number: string; name: string };
-}
-
-interface PlannedLabor {
-  id: string;
-  labor_type: string;
-  estimated_hours: number;
-  hourly_rate: number;
-}
 
 interface TicketDetailModalProps {
   isOpen: boolean;
@@ -74,6 +61,15 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
   // Hold-related state
   const [showNeedPartsModal, setShowNeedPartsModal] = useState(false);
   const [showReportIssueModal, setShowReportIssueModal] = useState(false);
+  const [showSendToShopModal, setShowSendToShopModal] = useState(false);
+
+  // Conflict warning state
+  const [showConflictWarning, setShowConflictWarning] = useState(false);
+  const [conflictingTickets, setConflictingTickets] = useState<ConflictingTicket[]>([]);
+  const [pendingTechnicianAssignment, setPendingTechnicianAssignment] = useState<typeof newAssignment | null>(null);
+
+  // Feature flags
+  const { enabled: mesEnabled } = useFeature('module_mes');
   const [parts, setParts] = useState<Part[]>([]);
   const [partsRequest, setPartsRequest] = useState({
     urgency: 'medium' as 'low' | 'medium' | 'high' | 'critical',
@@ -88,9 +84,6 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
     summary: '',
   });
 
-  const [plannedParts, setPlannedParts] = useState<PlannedPart[]>([]);
-  const [plannedLabor, setPlannedLabor] = useState<PlannedLabor[]>([]);
-
   const loadTicket = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -99,21 +92,17 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
           *,
           customers!tickets_customer_id_fkey(name, phone, address, city, state),
           profiles!tickets_assigned_to_fkey(full_name),
-          equipment(model_number, manufacturer, equipment_type, serial_number),
-          ticket_parts_planned(*, parts(part_number, name)),
-          ticket_labor_planned(*)
+          equipment(model_number, manufacturer, equipment_type, serial_number)
         `)
         .eq('id', ticketId)
         .maybeSingle();
 
       if (error) throw error;
-      const ticketData = data as unknown as (Ticket & { ticket_parts_planned?: PlannedPart[]; ticket_labor_planned?: PlannedLabor[] }) | null;
-      if (ticketData) {
+      if (data) {
+        const ticketData = data as unknown as Ticket;
         setTicket(ticketData);
-        setPlannedParts(ticketData.ticket_parts_planned || []);
-        setPlannedLabor(ticketData.ticket_labor_planned || []);
         setHoursOnsite(ticketData.hours_onsite?.toString() || '');
-        setStatus(ticketData.status || '');
+        setStatus(ticketData.status);
         setProblemCode(ticketData.problem_code || null);
         setResolutionCode(ticketData.resolution_code || null);
         // Format date for datetime-local input (YYYY-MM-DDTHH:MM)
@@ -145,14 +134,14 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
 
       if (error) throw error;
       if (data) {
-        setAssignments(data as unknown as TicketAssignment[]);
+        setAssignments((data as unknown as TicketAssignment[]));
       }
     } catch (error) {
       console.error('Error loading assignments:', error);
     }
   }, [ticketId]);
 
-  const loadTechnicians = async () => {
+  const loadTechnicians = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -163,12 +152,12 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
 
       if (error) throw error;
       if (data) {
-        setTechnicians(data);
+        setTechnicians((data as unknown as Profile[]));
       }
     } catch (error) {
       console.error('Error loading technicians:', error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (isOpen && ticketId) {
@@ -176,12 +165,34 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
       loadAssignments();
       loadTechnicians();
     }
-  }, [isOpen, ticketId, loadTicket, loadAssignments]);
+  }, [isOpen, ticketId, loadTicket, loadAssignments, loadTechnicians]);
 
-  const handleAddAssignment = async () => {
+  const handleAddAssignment = async (skipConflictCheck = false) => {
     if (!newAssignment.technician_id) {
       alert('Please select a technician');
       return;
+    }
+
+    // Check for conflicts if scheduled times are provided
+    if (!skipConflictCheck && newAssignment.scheduled_start) {
+      const proposedStart = new Date(newAssignment.scheduled_start);
+      const proposedEnd = newAssignment.scheduled_end
+        ? new Date(newAssignment.scheduled_end)
+        : new Date(proposedStart.getTime() + (ticket?.estimated_duration || 120) * 60 * 1000);
+
+      const conflictResult = await checkForConflicts({
+        technicianId: newAssignment.technician_id,
+        proposedStart,
+        proposedEnd,
+        excludeTicketId: ticketId,
+      });
+
+      if (conflictResult.hasConflict) {
+        setConflictingTickets(conflictResult.conflictingTickets);
+        setPendingTechnicianAssignment({ ...newAssignment });
+        setShowConflictWarning(true);
+        return;
+      }
     }
 
     try {
@@ -204,11 +215,55 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
         scheduled_end: '',
       });
       setShowAddTechnician(false);
+      setShowConflictWarning(false);
+      setPendingTechnicianAssignment(null);
       loadAssignments();
     } catch (error) {
       console.error('Error adding assignment:', error);
       alert('Failed to add technician assignment. Please try again.');
     }
+  };
+
+  const handleConflictConfirmAssignment = async () => {
+    if (pendingTechnicianAssignment) {
+      const savedAssignment = { ...pendingTechnicianAssignment };
+      setNewAssignment(savedAssignment);
+      setShowConflictWarning(false);
+      setPendingTechnicianAssignment(null);
+
+      // Execute the assignment with skipConflictCheck = true
+      try {
+        const { error } = await supabase
+          .from('ticket_assignments')
+          .insert({
+            ticket_id: ticketId,
+            technician_id: savedAssignment.technician_id,
+            role: savedAssignment.role || null,
+            scheduled_start: savedAssignment.scheduled_start || null,
+            scheduled_end: savedAssignment.scheduled_end || null,
+          });
+
+        if (error) throw error;
+
+        setNewAssignment({
+          technician_id: '',
+          role: '',
+          scheduled_start: '',
+          scheduled_end: '',
+        });
+        setShowAddTechnician(false);
+        loadAssignments();
+      } catch (error) {
+        console.error('Error adding assignment:', error);
+        alert('Failed to add technician assignment. Please try again.');
+      }
+    }
+  };
+
+  const handleConflictCancelAssignment = () => {
+    setShowConflictWarning(false);
+    setPendingTechnicianAssignment(null);
+    setConflictingTickets([]);
   };
 
   const handleRemoveAssignment = async (assignmentId: string) => {
@@ -237,7 +292,7 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
         .order('name');
 
       if (error) throw error;
-      if (data) setParts(data);
+      if (data) setParts(data as unknown as Part[]);
     } catch (error) {
       console.error('Error loading parts:', error);
     }
@@ -251,7 +306,7 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
 
     setSaving(true);
     try {
-      const { data: _holdData, error } = await supabase.rpc('fn_ticket_hold_for_parts', {
+      const { error } = await supabase.rpc('fn_ticket_hold_for_parts', {
         p_ticket_id: ticketId,
         p_urgency: partsRequest.urgency,
         p_notes: partsRequest.notes,
@@ -268,7 +323,8 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
       onUpdate();
     } catch (error: unknown) {
       console.error('Error creating parts hold:', error);
-      alert(error instanceof Error ? error.message : 'Failed to place ticket on hold. Please try again.');
+      const errorMessage = (error as { message?: string })?.message || 'Failed to place ticket on hold. Please try again.';
+      alert(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -282,7 +338,7 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
 
     setSaving(true);
     try {
-      const { data: _reportData, error } = await supabase.rpc('fn_ticket_report_issue', {
+      const { error } = await supabase.rpc('fn_ticket_report_issue', {
         p_ticket_id: ticketId,
         p_category: issueReport.category,
         p_severity: issueReport.severity,
@@ -300,7 +356,8 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
       onUpdate();
     } catch (error: unknown) {
       console.error('Error reporting issue:', error);
-      alert(error instanceof Error ? error.message : 'Failed to report issue. Please try again.');
+      const errorMessage = (error as { message?: string })?.message || 'Failed to report issue. Please try again.';
+      alert(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -311,9 +368,9 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
 
     setSaving(true);
     try {
-      const { data: _resumeData, error } = await supabase.rpc('fn_ticket_resume', {
+      const { error } = await supabase.rpc('fn_ticket_resume', {
         p_ticket_id: ticketId,
-        p_resolution_notes: undefined,
+        p_resolution_notes: null,
       });
 
       if (error) throw error;
@@ -323,7 +380,8 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
       onUpdate();
     } catch (error: unknown) {
       console.error('Error resuming ticket:', error);
-      alert(error instanceof Error ? error.message : 'Failed to resume ticket. Please try again.');
+      const errorMessage = (error as { message?: string })?.message || 'Failed to resume ticket. Please try again.';
+      alert(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -338,7 +396,7 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
 
   const updatePartInRequest = (index: number, field: string, value: string | number | null) => {
     const updated = [...partsRequest.parts];
-    updated[index] = { ...updated[index], [field]: value };
+    (updated[index] as unknown as Record<string, unknown>)[field] = value;
     setPartsRequest({ ...partsRequest, parts: updated });
   };
 
@@ -372,7 +430,7 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
 
     setSaving(true);
     try {
-      const updates: Partial<Database['public']['Tables']['tickets']['Update']> = {
+      const updates: Record<string, unknown> = {
         status,
         hours_onsite: hoursOnsite ? parseFloat(hoursOnsite) : null,
         problem_code: problemCode,
@@ -424,7 +482,7 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
       onClose();
     } catch (error: unknown) {
       console.error('Error updating ticket:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update ticket. Please try again.';
+      const errorMessage = (error as { message?: string })?.message || 'Failed to update ticket. Please try again.';
       alert(errorMessage);
     } finally {
       setSaving(false);
@@ -438,7 +496,6 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
       in_progress: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
       completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
       cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
-      awaiting_ahs_authorization: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
     };
     return colors[status] || colors.open;
   };
@@ -482,11 +539,11 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
                 <p className="text-gray-600 dark:text-gray-400 mt-1">{ticket.title}</p>
               </div>
               <div className="flex items-center space-x-2">
-                <span className={`badge ${getPriorityColor(ticket.priority ?? '')}`}>
+                <span className={`badge ${getPriorityColor(ticket.priority)}`}>
                   {ticket.priority}
                 </span>
-                <span className={`badge ${getStatusColor(ticket.status ?? '')}`}>
-                  {(ticket.status ?? 'unknown').replace('_', ' ')}
+                <span className={`badge ${getStatusColor(ticket.status)}`}>
+                  {ticket.status.replace('_', ' ')}
                 </span>
                 {ticket.hold_active && (
                   <span className="badge bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 flex items-center">
@@ -786,58 +843,6 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
               </div>
             </div>
 
-            {/* Planned Work & Materials (From Estimate) */}
-            {(plannedParts.length > 0 || plannedLabor.length > 0) && (
-              <div>
-                <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 flex items-center">
-                  <Package className="w-4 h-4 mr-2" />
-                  Planned Work & Materials
-                </h4>
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-700">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Item</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Description</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Qty/Hrs</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {plannedParts.map((part) => (
-                        <tr key={part.id}>
-                          <td className="px-4 py-2 text-sm text-gray-900 dark:text-white">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 mr-2">
-                              Part
-                            </span>
-                            {part.parts?.part_number || 'Custom Part'}
-                          </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">{part.description}</td>
-                          <td className="px-4 py-2 text-sm text-gray-900 dark:text-white text-right">{part.quantity}</td>
-                        </tr>
-                      ))}
-                      {plannedLabor.map((labor) => (
-                        <tr key={labor.id}>
-                          <td className="px-4 py-2 text-sm text-gray-900 dark:text-white">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 mr-2">
-                              Labor
-                            </span>
-                            Labor
-                          </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">{labor.description}</td>
-                          <td className="px-4 py-2 text-sm text-gray-900 dark:text-white text-right">{labor.labor_hours} hrs</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* AHS Warranty Panel */}
-            {AHSTicketService.isAHSTicket(ticket.ticket_type) && (
-              <AHSPanel ticketId={ticketId} onUpdate={() => { loadTicket(); onUpdate(); }} />
-            )}
-
             <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
               <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 Update Ticket
@@ -858,9 +863,6 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
                     <option value="in_progress">In Progress</option>
                     <option value="completed">Completed</option>
                     <option value="cancelled">Cancelled</option>
-                    {AHSTicketService.isAHSTicket(ticket?.ticket_type) && (
-                      <option value="awaiting_ahs_authorization">Awaiting AHS Authorization</option>
-                    )}
                   </select>
                 </div>
 
@@ -927,6 +929,16 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
                       <AlertCircle className="w-4 h-4 mr-1" />
                       Report Issue
                     </button>
+                    {mesEnabled && ticket?.status !== 'completed' && (
+                      <button
+                        type="button"
+                        onClick={() => setShowSendToShopModal(true)}
+                        className="px-3 py-2 text-sm bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg transition-colors flex items-center"
+                      >
+                        <Factory className="w-4 h-4 mr-1" />
+                        Send to Shop
+                      </button>
+                    )}
                   </>
                 ) : (
                   <button
@@ -1225,6 +1237,119 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
                 className="btn btn-primary"
               >
                 {saving ? 'Reporting...' : 'Report Issue'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Send to Shop Modal */}
+      {showSendToShopModal && ticket && (
+        <SendToShopModal
+          ticketId={ticket.id}
+          ticketNumber={ticket.ticket_number}
+          ticketTitle={ticket.title}
+          onClose={() => setShowSendToShopModal(false)}
+          onSuccess={(_orderId) => {
+            setShowSendToShopModal(false);
+            alert(`Production order created successfully!`);
+            onUpdate();
+          }}
+        />
+      )}
+
+      {/* Conflict Warning Modal */}
+      {showConflictWarning && pendingTechnicianAssignment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-lg w-full shadow-xl">
+            <div className="bg-yellow-50 dark:bg-yellow-900/30 border-b border-yellow-200 dark:border-yellow-800 px-6 py-4 flex items-center justify-between rounded-t-lg">
+              <div className="flex items-center space-x-3">
+                <div className="flex-shrink-0 w-10 h-10 bg-yellow-100 dark:bg-yellow-900/50 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-yellow-800 dark:text-yellow-200">
+                    Schedule Conflict Detected
+                  </h2>
+                  <p className="text-sm text-yellow-600 dark:text-yellow-400">
+                    Double-booking warning
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleConflictCancelAssignment}
+                className="p-2 hover:bg-yellow-100 dark:hover:bg-yellow-900/50 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Assigning{' '}
+                <span className="font-semibold text-gray-900 dark:text-white">
+                  {technicians.find(t => t.id === pendingTechnicianAssignment.technician_id)?.full_name}
+                </span>{' '}
+                to this ticket will overlap with {conflictingTickets.length} existing ticket
+                {conflictingTickets.length > 1 ? 's' : ''}.
+              </p>
+
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Conflicting Tickets:
+                </h3>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {conflictingTickets.map((ticket) => (
+                    <div
+                      key={ticket.ticketId}
+                      className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-semibold text-red-800 dark:text-red-300">
+                            {ticket.ticketNumber}
+                          </span>
+                          {ticket.customerName && (
+                            <span className="text-red-600 dark:text-red-400 text-sm ml-2">
+                              - {ticket.customerName}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center text-red-600 dark:text-red-400 text-sm">
+                          <Clock className="w-3 h-3 mr-1" />
+                          {ticket.start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} -{' '}
+                          {ticket.end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                        </div>
+                      </div>
+                      <p className="text-sm text-red-700 dark:text-red-300 mt-1 line-clamp-1">
+                        {ticket.title}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                  <AlertTriangle className="w-4 h-4 inline mr-1" />
+                  This technician may not be able to complete all jobs on time.
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end space-x-3">
+              <button
+                onClick={handleConflictCancelAssignment}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConflictConfirmAssignment}
+                className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors flex items-center"
+              >
+                <AlertTriangle className="w-4 h-4 mr-2" />
+                Assign Anyway
               </button>
             </div>
           </div>
