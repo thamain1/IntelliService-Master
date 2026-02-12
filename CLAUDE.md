@@ -1,7 +1,7 @@
 # IntelliService - Project Context for Claude
 
 ## Overview
-IntelliService is a field service management application for HVAC companies. It handles dispatching, ticketing, inventory management, invoicing, and business intelligence reporting.
+IntelliService is an ERP-style field service management platform for any field service industry. It handles dispatching, ticketing, inventory management, invoicing, and business intelligence reporting. The first vertical is HVAC, but the platform is designed to support any field service offering.
 
 ## Related Repositories
 
