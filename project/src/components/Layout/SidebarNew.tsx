@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { navigationConfig, NavigationItem, NavigationGroup } from '../../config/navigationConfig';
-import { FeatureGuard } from '../common/FeatureGuard';
 
 interface SidebarNewProps {
   currentView: string;
@@ -236,15 +235,7 @@ export function SidebarNew({ currentView, onViewChange, isCollapsed: controlledC
 
       <div className="flex-1 overflow-y-auto p-3">
         <nav className="space-y-1">
-          {visibleGroups.map((group) => (
-            group.id === 'production' ? (
-              <FeatureGuard key={group.id} featureKey="module_mes">
-                {renderGroup(group)}
-              </FeatureGuard>
-            ) : (
-              renderGroup(group)
-            )
-          ))}
+          {visibleGroups.map((group) => renderGroup(group))}
         </nav>
       </div>
 
