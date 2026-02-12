@@ -3,6 +3,24 @@
 ## Overview
 IntelliService is a field service management application for HVAC companies. It handles dispatching, ticketing, inventory management, invoicing, and business intelligence reporting.
 
+## Related Repositories
+
+### IntelliServiceBeta (This Repo) - Field Service Management
+- **Repository**: https://github.com/thamain1/IntelliServiceBeta
+- **Deployment**: Cloudflare Pages → https://intelliservice.pages.dev
+- **Purpose**: Field service operations - dispatching, ticketing, inventory, invoicing, BI reporting
+- **Supabase Project ID**: uuarbdrzfakvlhlrnwgc
+
+### IntelliService-MES - Manufacturing Execution System
+- **Repository**: https://github.com/thamain1/IntelliService-MES
+- **Purpose**: Manufacturing operations - production scheduling, work orders, shop floor, quality control
+- **Note**: Completely separate codebase and deployment from field service
+
+### IntelliService - Pitch Deck & Demo
+- **Repository**: Local at C:\dev\IntelliService
+- **Purpose**: Marketing pitch deck, wireframes, and AI Agent dashboard demo
+- **Not deployed** - used for presentations only
+
 ## Tech Stack
 - **Frontend**: React + TypeScript + Vite
 - **Styling**: Tailwind CSS
@@ -110,6 +128,11 @@ The view was fixed to only show truck parts that have explicit `inventory_reorde
 
 ### EXTRACT(DAY FROM date_diff) error
 PostgreSQL date subtraction already returns integer days. Don't use EXTRACT on the result.
+
+## Recent Changes (Feb 2026)
+1. Added collapsible sidebar with localStorage persistence
+2. Dispatch calendar with day/week views and double-booking protection
+3. Ticket detail modal with conflict checks
 
 ## Recent Changes (Jan 2026)
 1. Fixed RLS policy for `time_logs` - admins can now view all staff time logs
