@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Users, Building, Bell, Shield, DollarSign } from 'lucide-react';
+import { Users, Building, Bell, Shield, DollarSign, Truck } from 'lucide-react';
 import { UserManagement } from './UserManagement';
 import { CompanySettings } from './CompanySettings';
 import { NotificationsSettings } from './NotificationsSettings';
 import { PermissionsSettings } from './PermissionsSettings';
 import { LaborRatesSettings } from './LaborRatesSettings';
 import { AHSSettingsPanel } from './AHSSettingsPanel';
+import { VehiclesSettings } from './VehiclesSettings';
 
-type SettingsTab = 'users' | 'company' | 'notifications' | 'permissions' | 'labor-rates' | 'ahs-warranty';
+type SettingsTab = 'users' | 'company' | 'notifications' | 'permissions' | 'labor-rates' | 'ahs-warranty' | 'vehicles';
 
 interface SettingsViewProps {
   initialTab?: string;
@@ -21,6 +22,7 @@ export function SettingsView({ initialTab }: SettingsViewProps) {
       case 'settings-labor-rates': return 'labor-rates';
       case 'settings-notifications': return 'notifications';
       case 'settings-permissions': return 'permissions';
+      case 'settings-vehicles': return 'vehicles';
       default: return 'users';
     }
   };
@@ -38,6 +40,7 @@ export function SettingsView({ initialTab }: SettingsViewProps) {
     { id: 'users' as SettingsTab, label: 'Users', icon: Users },
     { id: 'company' as SettingsTab, label: 'Company', icon: Building },
     { id: 'labor-rates' as SettingsTab, label: 'Labor Rates', icon: DollarSign },
+    { id: 'vehicles' as SettingsTab, label: 'Vehicles', icon: Truck },
     { id: 'ahs-warranty' as SettingsTab, label: 'AHS Warranty', icon: Shield },
     { id: 'notifications' as SettingsTab, label: 'Notifications', icon: Bell },
     { id: 'permissions' as SettingsTab, label: 'Permissions', icon: Shield },
@@ -51,6 +54,8 @@ export function SettingsView({ initialTab }: SettingsViewProps) {
         return <CompanySettings />;
       case 'labor-rates':
         return <LaborRatesSettings />;
+      case 'vehicles':
+        return <VehiclesSettings />;
       case 'ahs-warranty':
         return <AHSSettingsPanel />;
       case 'notifications':

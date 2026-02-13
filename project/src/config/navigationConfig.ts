@@ -38,6 +38,7 @@ import {
   Kanban,
   Activity,
   BarChart3,
+  Truck,
 } from 'lucide-react';
 
 export interface NavigationItem {
@@ -566,6 +567,12 @@ export const navigationConfig: NavigationGroup[] = [
             id: 'settings-permissions',
             label: 'Permissions',
             icon: Shield,
+            roles: ['admin'],
+          },
+          {
+            id: 'settings-vehicles',
+            label: 'Vehicles',
+            icon: Truck,
             roles: ['admin'],
           },
         ],
