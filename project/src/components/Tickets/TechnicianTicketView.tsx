@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Camera, Package, MessageSquare, CheckCircle, Clock, AlertTriangle, MapPin, Phone, User, Plus, X, History, Eye, AlertOctagon, PackageX, Navigation } from 'lucide-react';
+import { Camera, Package, MessageSquare, CheckCircle, Clock, AlertTriangle, MapPin, Phone, User, Plus, X, History, Eye, AlertOctagon, PackageX, Navigation, ClipboardList } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { holdTicketForParts, reportTicketIssue } from '../../services/TicketHoldService';
@@ -83,6 +83,18 @@ type PartUsed = {
   };
 };
 
+type PlannedPart = {
+  id: string;
+  quantity: number;
+  description: string;
+  unit_price: number | null;
+  line_total: number | null;
+  parts: {
+    part_number: string;
+    name: string;
+  } | null;
+};
+
 type Part = {
   id: string | null;
   part_number: string | null;
@@ -110,6 +122,7 @@ export function TechnicianTicketView() {
   const [updates, setUpdates] = useState<TicketUpdate[]>([]);
   const [photos, setPhotos] = useState<TicketPhoto[]>([]);
   const [partsUsed, setPartsUsed] = useState<PartUsed[]>([]);
+  const [plannedParts, setPlannedParts] = useState<PlannedPart[]>([]);
   const [availableParts, setAvailableParts] = useState<Part[]>([]);
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
   const [onSiteProgress, setOnSiteProgress] = useState<OnSiteProgress | null>(null);
@@ -306,7 +319,7 @@ export function TechnicianTicketView() {
   const loadTicketDetails = async (ticketId: string) => {
     console.log('Loading ticket details for:', ticketId);
     try {
-      const [updatesRes, photosRes, partsRes] = await Promise.all([
+      const [updatesRes, photosRes, partsRes, plannedPartsRes] = await Promise.all([
         supabase
           .from('ticket_updates')
           .select('*, profiles(full_name)')
@@ -322,15 +335,22 @@ export function TechnicianTicketView() {
           .select('*, parts(part_number, name, unit_price)')
           .eq('ticket_id', ticketId)
           .order('created_at', { ascending: false }),
+        supabase
+          .from('ticket_parts_planned')
+          .select('*, parts(part_number, name)')
+          .eq('ticket_id', ticketId)
+          .order('created_at', { ascending: true }),
       ]);
 
       if (updatesRes.error) throw updatesRes.error;
       if (photosRes.error) throw photosRes.error;
       if (partsRes.error) throw partsRes.error;
+      if (plannedPartsRes.error) throw plannedPartsRes.error;
 
       setUpdates(updatesRes.data || []);
       setPhotos(photosRes.data || []);
       setPartsUsed(partsRes.data || []);
+      setPlannedParts(plannedPartsRes.data || []);
 
       if (viewMode !== 'readonly') {
         await loadTruckInventory();
@@ -1076,6 +1096,47 @@ export function TechnicianTicketView() {
                 )}
               </div>
             </div>
+
+            {/* Planned Materials from Estimate */}
+            {plannedParts.length > 0 && (
+              <div className="card p-6 border-l-4 border-l-blue-500">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+                    <ClipboardList className="w-5 h-5 mr-2 text-blue-600" />
+                    Planned Materials
+                  </h2>
+                  <span className="badge badge-blue">From Estimate</span>
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                  Parts specified in the approved estimate for this job
+                </p>
+                <div className="space-y-3">
+                  {plannedParts.map((part) => (
+                    <div key={part.id} className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 pb-3">
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-white">
+                          {part.parts?.name || part.description}
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {part.parts?.part_number ? `${part.parts.part_number} - ` : ''}Qty: {part.quantity}
+                        </p>
+                      </div>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        ${((part.unit_price ?? 0) * part.quantity).toFixed(2)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between font-bold">
+                    <span className="text-gray-900 dark:text-white">Planned Total</span>
+                    <span className="text-blue-600">
+                      ${plannedParts.reduce((sum, p) => sum + ((p.unit_price ?? 0) * p.quantity), 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="card p-6">
               <div className="flex items-center justify-between mb-4">
