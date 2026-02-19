@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Clock, User, Calendar, Wrench, AlertCircle, Plus, Trash2, UserPlus, Pause, Package, Play, Tag, TrendingUp, AlertTriangle } from 'lucide-react';
+import { X, Clock, User, Calendar, Wrench, AlertCircle, Plus, Trash2, UserPlus, Pause, Package, Play, Tag, TrendingUp, AlertTriangle, FileText, XCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { CodeSelector } from '../CRM/CodeSelector';
 import { AHSPanel } from '../Tickets/AHSPanel';
 import { AHSTicketService } from '../../services/AHSTicketService';
 import { checkForConflicts, type ConflictingTicket } from '../../services/ScheduleConflictService';
 import type { Database } from '../../lib/database.types';
+
+type ServiceContract = Database['public']['Tables']['service_contracts']['Row'];
 
 type Ticket = Database['public']['Tables']['tickets']['Row'] & {
   customers?: { name: string; phone: string; address: string; city: string; state: string };
@@ -97,6 +99,11 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
   const [plannedParts, setPlannedParts] = useState<PlannedPart[]>([]);
   const [plannedLabor, setPlannedLabor] = useState<PlannedLabor[]>([]);
 
+  // Service Contract state
+  const [serviceContractId, setServiceContractId] = useState<string | null>(null);
+  const [customerContracts, setCustomerContracts] = useState<ServiceContract[]>([]);
+  const [loadingContracts, setLoadingContracts] = useState(false);
+
   const loadTicket = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -122,6 +129,7 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
         setStatus(ticketData.status || '');
         setProblemCode(ticketData.problem_code || null);
         setResolutionCode(ticketData.resolution_code || null);
+        setServiceContractId(ticketData.service_contract_id || null);
         // Format date for datetime-local input (YYYY-MM-DDTHH:MM)
         if (ticketData.scheduled_date) {
           const date = new Date(ticketData.scheduled_date);
@@ -130,13 +138,17 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
         } else {
           setScheduledDate('');
         }
+        // Load available contracts for this customer
+        if (ticketData.customer_id) {
+          loadCustomerContracts(ticketData.customer_id);
+        }
       }
     } catch (error) {
       console.error('Error loading ticket:', error);
     } finally {
       setLoading(false);
     }
-  }, [ticketId]);
+  }, [ticketId, loadCustomerContracts]);
 
   const loadAssignments = useCallback(async () => {
     try {
@@ -175,6 +187,26 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
       console.error('Error loading technicians:', error);
     }
   };
+
+  const loadCustomerContracts = useCallback(async (customerId: string) => {
+    setLoadingContracts(true);
+    try {
+      const { data, error } = await supabase
+        .from('service_contracts')
+        .select('*')
+        .eq('customer_id', customerId)
+        .eq('status', 'active')
+        .order('name');
+
+      if (error) throw error;
+      setCustomerContracts(data || []);
+    } catch (error) {
+      console.error('Error loading customer contracts:', error);
+      setCustomerContracts([]);
+    } finally {
+      setLoadingContracts(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (isOpen && ticketId) {
@@ -448,6 +480,7 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
         problem_code: problemCode,
         resolution_code: resolutionCode,
         scheduled_date: scheduledDate ? new Date(scheduledDate).toISOString() : null,
+        service_contract_id: serviceContractId,
       };
 
       if (status === 'completed' && !ticket.completed_date) {
@@ -620,6 +653,48 @@ export function TicketDetailModal({ isOpen, onClose, ticketId, onUpdate }: Ticke
                       </>
                     ) : (
                       <p className="text-gray-600 dark:text-gray-400">No equipment assigned</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Service Contract */}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 flex items-center">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Service Contract
+                  </h4>
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                    {loadingContracts ? (
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">Loading contracts...</p>
+                    ) : customerContracts.length > 0 ? (
+                      <div className="space-y-2">
+                        <select
+                          value={serviceContractId || ''}
+                          onChange={(e) => setServiceContractId(e.target.value || null)}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="">No Contract (Out of Coverage)</option>
+                          {customerContracts.map((contract) => (
+                            <option key={contract.id} value={contract.id}>
+                              {contract.name} - {contract.contract_type}
+                            </option>
+                          ))}
+                        </select>
+                        {serviceContractId && (
+                          <button
+                            type="button"
+                            onClick={() => setServiceContractId(null)}
+                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 flex items-center"
+                          >
+                            <XCircle className="w-3 h-3 mr-1" />
+                            Remove Contract (Work Outside Coverage)
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-gray-600 dark:text-gray-400 text-sm">
+                        No active contracts for this customer
+                      </p>
                     )}
                   </div>
                 </div>
