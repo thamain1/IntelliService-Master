@@ -106,7 +106,15 @@ export function TicketsView({ initialFilter }: TicketsViewProps = {}) {
 
   useEffect(() => {
     if (initialFilter && initialFilter !== 'all') {
-      setStatusFilter(initialFilter);
+      // Check if initialFilter is a UUID (ticket ID) - UUIDs are 36 chars with dashes
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(initialFilter)) {
+        // Open the ticket detail modal for this specific ticket
+        setSelectedTicketId(initialFilter);
+      } else {
+        // It's a status filter
+        setStatusFilter(initialFilter);
+      }
     }
   }, [initialFilter]);
 

@@ -24,9 +24,10 @@ interface LinkedRequest {
 interface PartsManagementViewProps {
   initialView?: string;
   itemType?: ItemType;
+  onNavigateToTicket?: (ticketId: string) => void;
 }
 
-export function PartsManagementView({ initialView, itemType = 'part' }: PartsManagementViewProps) {
+export function PartsManagementView({ initialView, itemType = 'part', onNavigateToTicket }: PartsManagementViewProps) {
   const isTool = itemType === 'tool';
   const itemLabelPlural = isTool ? 'Tools' : 'Parts';
   const ItemIcon = isTool ? Wrench : Package;
@@ -67,6 +68,12 @@ export function PartsManagementView({ initialView, itemType = 'part' }: PartsMan
   const handleCreatePOFromRequest = (request: LinkedRequest) => {
     setLinkedRequest(request);
     setActiveTab('orders');
+  };
+
+  // Handle returning to parts requests after PO creation
+  const handleClearLinkedRequest = () => {
+    setLinkedRequest(null);
+    setActiveTab('requests'); // Return to parts requests tab
   };
 
   const tabs: Array<{ id: TabType; label: string; icon: typeof Package }> = [
@@ -117,14 +124,14 @@ export function PartsManagementView({ initialView, itemType = 'part' }: PartsMan
 
       <div className="mt-6">
         {activeTab === 'catalog' && <PartsView itemType={itemType} />}
-        {activeTab === 'requests' && <PartsRequestQueue onCreatePO={handleCreatePOFromRequest} />}
+        {activeTab === 'requests' && <PartsRequestQueue onCreatePO={handleCreatePOFromRequest} onViewTicket={onNavigateToTicket} />}
         {activeTab === 'pickup' && <PartsPickupView />}
         {activeTab === 'vendors' && <VendorsView />}
         {activeTab === 'orders' && (
           <PurchaseOrdersView
             itemType={itemType}
             linkedRequest={linkedRequest}
-            onClearLinkedRequest={() => setLinkedRequest(null)}
+            onClearLinkedRequest={handleClearLinkedRequest}
           />
         )}
         {activeTab === 'serialized' && <SerializedPartsView itemType={itemType} />}

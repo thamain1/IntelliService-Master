@@ -49,6 +49,17 @@ project/
 └── dist/                    # Build output (deployed to Cloudflare)
 ```
 
+## Database Environments
+There are 3 separate Supabase databases:
+
+| Environment | URL | Project ID | Purpose |
+|-------------|-----|------------|---------|
+| Demo/Test | https://uuarbdrzfakvlhlrnwgc.supabase.co | uuarbdrzfakvlhlrnwgc | Online demo and testing |
+| Production | https://trtqrdplgjgysyspwvam.supabase.co | trtqrdplgjgysyspwvam | Live production environment |
+| MES | https://vijbnqrewokckwmtbbhi.supabase.co | vijbnqrewokckwmtbbhi | Manufacturing Execution System |
+
+**IMPORTANT**: When applying migrations, they must be applied to ALL THREE databases.
+
 ## Database
 - **109 tables** in Supabase PostgreSQL
 - Types generated via: `npx supabase gen types typescript --project-id uuarbdrzfakvlhlrnwgc`
