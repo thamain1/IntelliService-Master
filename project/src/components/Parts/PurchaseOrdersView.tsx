@@ -261,24 +261,40 @@ export function PurchaseOrdersView({ itemType = 'part', linkedRequest, onClearLi
 
       if (linesError) throw linesError;
 
-      // If this PO is linked to a parts request, update the request status
+      // Update any linked parts requests to 'ordered' status
+      // This handles both the linkedRequest flow and individual line items with linked_request_id
+      const linkedRequestIds = new Set<string>();
+
+      // Add from linkedRequest prop if present
       if (linkedRequest) {
+        linkedRequestIds.add(linkedRequest.request_id);
+      }
+
+      // Add from individual line items
+      lineItems.forEach(item => {
+        if (item.linked_request_id) {
+          linkedRequestIds.add(item.linked_request_id);
+        }
+      });
+
+      // Update all linked parts requests
+      for (const requestId of linkedRequestIds) {
         const { error: updateError } = await supabase
           .from('ticket_parts_requests')
           .update({
             po_id: poData.id,
             status: 'ordered',
           })
-          .eq('id', linkedRequest.request_id);
+          .eq('id', requestId);
 
         if (updateError) {
           console.error('Error updating parts request:', updateError);
         }
+      }
 
-        // Clear the linked request
-        if (onClearLinkedRequest) {
-          onClearLinkedRequest();
-        }
+      // Clear the linked request if using that flow
+      if (linkedRequest && onClearLinkedRequest) {
+        onClearLinkedRequest();
       }
 
       setShowAddModal(false);
@@ -310,6 +326,30 @@ export function PurchaseOrdersView({ itemType = 'part', linkedRequest, onClearLi
         .eq('id', poId);
 
       if (error) throw error;
+
+      // When PO is submitted or approved, update any linked parts requests to 'ordered'
+      if (newStatus === 'submitted' || newStatus === 'approved') {
+        // Find PO lines with linked requests
+        const { data: poLines } = await supabase
+          .from('purchase_order_lines')
+          .select('linked_request_id')
+          .eq('po_id', poId)
+          .not('linked_request_id', 'is', null);
+
+        if (poLines && poLines.length > 0) {
+          const requestIds = [...new Set(poLines.map(line => line.linked_request_id).filter(Boolean))];
+
+          for (const requestId of requestIds) {
+            await supabase
+              .from('ticket_parts_requests')
+              .update({
+                status: 'ordered',
+                po_id: poId
+              })
+              .eq('id', requestId);
+          }
+        }
+      }
 
       loadData();
     } catch (error) {
