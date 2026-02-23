@@ -1259,7 +1259,7 @@ export function TechnicianTicketView() {
                         Based on: "{selectedTicket.title}"
                       </span>
                       <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
-                        Powered by Neural Command
+                        AI-Powered Insights
                       </span>
                     </div>
                   </div>
@@ -1325,7 +1325,7 @@ export function TechnicianTicketView() {
                         Diagnostic Confidence: {equipmentIntel.confidenceScore}%
                       </span>
                       <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">
-                        Powered by Neural Command
+                        AI-Powered Insights
                       </span>
                     </div>
                   </div>
