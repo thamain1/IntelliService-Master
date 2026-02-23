@@ -85,9 +85,10 @@ export function ReceivingModal({ purchaseOrderId, onClose, onComplete }: Receivi
 
       const initialData: Record<string, ReceivingItem> = {};
       linesResult.data.forEach((line) => {
+        const remainingQty = line.quantity_ordered - (line.quantity_received || 0);
         initialData[line.id] = {
           line_id: line.id,
-          quantity_received: line.quantity_ordered,
+          quantity_received: Math.max(0, remainingQty), // Pre-fill with remaining quantity only
           quantity_damaged: 0,
           stock_location_id: locationsResult.data[0]?.id || '',
           serial_numbers: [],
@@ -105,6 +106,14 @@ export function ReceivingModal({ purchaseOrderId, onClose, onComplete }: Receivi
   };
 
   const updateReceivingItem = (lineId: string, field: keyof ReceivingItem, value: string | number | string[]) => {
+    // Enforce max limit for quantity_received
+    if (field === 'quantity_received' && typeof value === 'number') {
+      const line = lines.find(l => l.id === lineId);
+      if (line) {
+        const remainingQty = line.quantity_ordered - (line.quantity_received || 0);
+        value = Math.min(Math.max(0, value), remainingQty);
+      }
+    }
     setReceivingData((prev) => ({
       ...prev,
       [lineId]: {
@@ -261,8 +270,10 @@ export function ReceivingModal({ purchaseOrderId, onClose, onComplete }: Receivi
             const part = line.parts;
             const remainingQty = line.quantity_ordered - (line.quantity_received || 0);
 
+            const isFullyReceived = remainingQty <= 0;
+
             return (
-              <div key={line.id} className="card p-6 space-y-4">
+              <div key={line.id} className={`card p-6 space-y-4 ${isFullyReceived ? 'opacity-60 bg-green-50 dark:bg-green-900/10' : ''}`}>
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -279,11 +290,17 @@ export function ReceivingModal({ purchaseOrderId, onClose, onComplete }: Receivi
                         Previously Received: <span className="font-medium">{line.quantity_received || 0}</span>
                       </span>
                       <span className="text-gray-600 dark:text-gray-400">
-                        Remaining: <span className="font-medium text-blue-600">{remainingQty}</span>
+                        Remaining: <span className={`font-medium ${isFullyReceived ? 'text-green-600' : 'text-blue-600'}`}>{remainingQty}</span>
                       </span>
                     </div>
                   </div>
                   <div className="flex flex-col items-end space-y-2">
+                    {isFullyReceived && (
+                      <span className="badge badge-green">
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Fully Received
+                      </span>
+                    )}
                     {part.is_serialized && (
                       <span className="badge badge-blue">
                         <Hash className="w-3 h-3 mr-1" />
@@ -320,57 +337,65 @@ export function ReceivingModal({ purchaseOrderId, onClose, onComplete }: Receivi
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Quantity Received
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max={remainingQty}
-                      value={receivingItem?.quantity_received || 0}
-                      onChange={(e) =>
-                        updateReceivingItem(line.id, 'quantity_received', parseInt(e.target.value) || 0)
-                      }
-                      className="input"
-                    />
+                {isFullyReceived ? (
+                  <div className="p-4 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                    <p className="text-sm text-green-700 dark:text-green-300 font-medium">
+                      All items have been received for this line.
+                    </p>
                   </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Quantity Received (max: {remainingQty})
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max={remainingQty}
+                        value={receivingItem?.quantity_received || 0}
+                        onChange={(e) =>
+                          updateReceivingItem(line.id, 'quantity_received', parseInt(e.target.value) || 0)
+                        }
+                        className="input"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Quantity Damaged
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={receivingItem?.quantity_damaged || 0}
-                      onChange={(e) =>
-                        updateReceivingItem(line.id, 'quantity_damaged', parseInt(e.target.value) || 0)
-                      }
-                      className="input"
-                    />
-                  </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Quantity Damaged
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={receivingItem?.quantity_damaged || 0}
+                        onChange={(e) =>
+                          updateReceivingItem(line.id, 'quantity_damaged', parseInt(e.target.value) || 0)
+                        }
+                        className="input"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      <MapPin className="w-4 h-4 inline mr-1" />
-                      Stock Location
-                    </label>
-                    <select
-                      value={receivingItem?.stock_location_id || ''}
-                      onChange={(e) => updateReceivingItem(line.id, 'stock_location_id', e.target.value)}
-                      className="input"
-                    >
-                      <option value="">Select location...</option>
-                      {stockLocations.map((loc) => (
-                        <option key={loc.id} value={loc.id}>
-                          {loc.name} ({loc.location_type})
-                        </option>
-                      ))}
-                    </select>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <MapPin className="w-4 h-4 inline mr-1" />
+                        Stock Location
+                      </label>
+                      <select
+                        value={receivingItem?.stock_location_id || ''}
+                        onChange={(e) => updateReceivingItem(line.id, 'stock_location_id', e.target.value)}
+                        className="input"
+                      >
+                        <option value="">Select location...</option>
+                        {stockLocations.map((loc) => (
+                          <option key={loc.id} value={loc.id}>
+                            {loc.name} ({loc.location_type})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {part.is_serialized && receivingItem && receivingItem.quantity_received > 0 && (
                   <div className="space-y-3">
@@ -445,24 +470,32 @@ export function ReceivingModal({ purchaseOrderId, onClose, onComplete }: Receivi
               <Package className="w-4 h-4 mr-1" />
               <span>{lines.length} line items</span>
             </div>
+            {lines.every((line) => (line.quantity_ordered - (line.quantity_received || 0)) <= 0) && (
+              <div className="flex items-center text-sm text-green-600 font-medium">
+                <CheckCircle className="w-4 h-4 mr-1" />
+                <span>All items fully received</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center space-x-3">
             <button onClick={onClose} className="btn-outline" disabled={saving}>
-              Cancel
+              {lines.every((line) => (line.quantity_ordered - (line.quantity_received || 0)) <= 0) ? 'Close' : 'Cancel'}
             </button>
-            <button onClick={handleReceive} className="btn-primary" disabled={saving}>
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Receiving...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="w-5 h-5 mr-2" />
-                  Complete Receiving
-                </>
-              )}
-            </button>
+            {!lines.every((line) => (line.quantity_ordered - (line.quantity_received || 0)) <= 0) && (
+              <button onClick={handleReceive} className="btn-primary" disabled={saving}>
+                {saving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Receiving...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-5 h-5 mr-2" />
+                    Complete Receiving
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>

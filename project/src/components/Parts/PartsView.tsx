@@ -62,6 +62,7 @@ export function PartsView({ itemType = 'part' }: PartsViewProps) {
     name: string;
   } | null>(null);
   const [editingPart, setEditingPart] = useState<PartWithInventory | null>(null);
+  const [showLowStockModal, setShowLowStockModal] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [vendorMapping, setVendorMapping] = useState<VendorMapping>({
     vendor_id: '',
@@ -420,11 +421,17 @@ export function PartsView({ itemType = 'part' }: PartsViewProps) {
           </div>
         </div>
 
-        <div className="card p-6">
+        <div
+          className={`card p-6 ${reorderAlertCount > 0 ? 'cursor-pointer hover:ring-2 hover:ring-red-400 transition-all' : ''}`}
+          onClick={() => reorderAlertCount > 0 && setShowLowStockModal(true)}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 dark:text-gray-400">Low Stock Items</p>
               <p className="text-3xl font-bold text-red-600 mt-2">{reorderAlertCount}</p>
+              {reorderAlertCount > 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Click to view details</p>
+              )}
             </div>
             <div className="bg-red-100 dark:bg-red-900/20 text-red-600 p-3 rounded-lg">
               <AlertTriangle className="w-6 h-6" />
@@ -620,22 +627,78 @@ export function PartsView({ itemType = 'part' }: PartsViewProps) {
         </div>
       </div>
 
-      {reorderAlertCount > 0 && (
-        <div className="card p-6 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
-          <div className="flex items-start space-x-3">
-            <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="font-bold text-red-900 dark:text-red-200">Low Stock Alert</h3>
-              <p className="text-sm text-red-700 dark:text-red-300 mt-1">
-                {reorderAlertCount} {itemLabelPlural.toLowerCase()} need to be reordered
-              </p>
-              <div className="mt-3 space-y-1">
-                {lowStockParts.slice(0, 5).map((part) => (
-                  <p key={part.id} className="text-sm text-red-600 dark:text-red-400">
-                    {part.name} ({part.part_number}) - Only {part.quantity_on_hand} remaining
+      {/* Low Stock Alert Modal */}
+      {showLowStockModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-red-50 dark:bg-red-900/20">
+              <div className="flex items-center space-x-3">
+                <div className="bg-red-100 dark:bg-red-900/40 p-2 rounded-lg">
+                  <AlertTriangle className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-red-900 dark:text-red-100">Low Stock Alert</h2>
+                  <p className="text-sm text-red-700 dark:text-red-300">
+                    {lowStockParts.length} {itemLabelPlural.toLowerCase()} need to be reordered
                   </p>
-                ))}
+                </div>
               </div>
+              <button
+                onClick={() => setShowLowStockModal(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="space-y-3">
+                {lowStockParts.map((part) => {
+                  const status = getStockStatus(part);
+                  return (
+                    <div
+                      key={part.id}
+                      className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {part.name}
+                          </span>
+                          <span className={status.class}>{status.text}</span>
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          {part.part_number} • {part.manufacturer || 'No manufacturer'}
+                        </p>
+                      </div>
+                      <div className="text-right ml-4">
+                        <p className="text-2xl font-bold text-red-600">
+                          {part.quantity_on_hand ?? 0}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Reorder at: {part.reorder_level ?? 0}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {lowStockParts.length === 0 && (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>No low stock items</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setShowLowStockModal(false)}
+                className="btn btn-outline w-full"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
