@@ -43,7 +43,7 @@ export function VehiclesSettings() {
       const { data: profiles, error: profError } = await supabase
         .from('profiles')
         .select('id, full_name')
-        .eq('role', 'technician');
+        .in('role', ['technician', 'lead_tech', 'supervisor']);
 
       if (profError) throw profError;
 
@@ -69,7 +69,7 @@ export function VehiclesSettings() {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('role', 'technician')
+        .in('role', ['technician', 'lead_tech', 'supervisor'])
         .eq('is_active', true)
         .order('full_name', { ascending: true });
 

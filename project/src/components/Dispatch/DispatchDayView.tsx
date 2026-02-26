@@ -64,7 +64,7 @@ export function DispatchDayView({ selectedDate, onDateChange, onBackToCalendar }
         supabase
           .from('profiles')
           .select('*')
-          .eq('role', 'technician')
+          .in('role', ['technician', 'lead_tech', 'supervisor'])
           .order('full_name', { ascending: true }),
       ]);
 

@@ -101,7 +101,7 @@ export function NewEstimateModal({
         supabase
           .from('profiles')
           .select('*')
-          .eq('role', 'technician')
+          .in('role', ['technician', 'lead_tech', 'supervisor'])
           .eq('is_active', true)
           .order('full_name'),
         supabase
