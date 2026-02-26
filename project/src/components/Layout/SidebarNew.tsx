@@ -221,13 +221,13 @@ export function SidebarNew({ currentView, onViewChange, isCollapsed: controlledC
         <div className="flex items-center justify-center">
           {isCollapsed ? (
             <img
-              src={companyLogoUrl || '/image.png'}
+              src={companyLogoUrl || '/logo.png'}
               alt={companyName}
               className="h-10 w-10 object-contain"
             />
           ) : (
             <img
-              src={companyLogoUrl || '/image.png'}
+              src={companyLogoUrl || '/logo.png'}
               alt={companyName}
               className="h-16 w-auto object-contain"
             />
